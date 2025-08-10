@@ -42,8 +42,7 @@
          base-url: "https://api.openai.com/v1"
    ```
 
-3. **【重要】配置 MCP 服务** 本项目通过一个外部的 `mcp-server` 来和 Obsidian 通信。您需要： a. 确保 Obsidian 中已安装并启用了 **Local REST API** 插件。 b. 自行准备并运行一个 [mcp-obsidian](https://github.com/MarkusPfundstein/mcp-obsidian) 服务端。 c. 修改 `src/main/resources/mcp-connections.yml` 文件，将其中的 `directory` 路径指向你本地的 `mcp-obsidian` 项目路径，并填入正确的 `OBSIDIAN_API_KEY`。
-
+3. **配置 MCP 服务** 本项目通过一个外部的 `mcp-server` 来和 Obsidian 通信。您需要： a. 确保 Obsidian 中已安装并启用了 **Local REST API** 插件。 b. 自行准备一个 [mcp-obsidian](https://github.com/MarkusPfundstein/mcp-obsidian) 服务端。 c. 修改 `src/main/resources/application.yml` 文件，将其中的 `directory` 路径指向你本地的 `mcp-obsidian` 项目路径，并填入正确的 `OBSIDIAN_API_KEY`。
 4. **运行应用**
 
    ```
