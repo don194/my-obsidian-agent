@@ -1,0 +1,74 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: obsidian-agent
+    # SQLite数据库配置
+  datasource:
+    url: jdbc:sqlite:./data/obsidian_agent.db
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: update  # 自动创建/更新表结构
+    show-sql: false     # 生产环境设为false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: Asia/Shanghai
+
+    # SQL脚本初始化（可选）
+    sql:
+      init:
+        mode: never  # 如果需要初始化脚本，改为always
+  ai:
+    openai:
+      # 生产环境 - 通过环境变量配置
+      api-key: ${SPRING_AI_OPENAI_API_KEY:your-api-key-here}
+      base-url: ${SPRING_AI_OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${SPRING_AI_OPENAI_MODEL:gpt-4o-mini}
+          temperature: ${SPRING_AI_OPENAI_TEMPERATURE:0.7}
+          max-tokens: ${SPRING_AI_OPENAI_MAX_TOKENS:1000}
+        client:
+          connect-timeout: 30s
+          read-timeout: 60s
+    mcp:
+      client:
+        enabled: true
+        name: obsidian-agent-mcp
+        version: 1.1.0
+        initialized: true
+        request-timeout: 120s
+        type: SYNC
+
+        # STDIO传输配置 - 连接mcp-obsidian
+        stdio:
+          connections:
+            obsidian:
+              command: uv
+              args:
+                - run
+                - --directory
+                - "D:/dongh/Documents/java/mcp-obsidian"  # 指定工作目录
+                - mcp-obsidian
+              env:
+                OBSIDIAN_API_KEY: ${OBSIDIAN_API_KEY:6a193ce7b058b9b251ea1486dd25914d6ac47aabbed05726025c8a5dc5bc3a5b}
+                OBSIDIAN_HOST: ${OBSIDIAN_HOST:127.0.0.1}
+                OBSIDIAN_PORT: ${OBSIDIAN_PORT:27123}
+                OBSIDIAN_PROTOCOL: ${OBSIDIAN_PROTOCOL:http}
+# 基础日志配置
+logging:
+  level:
+    io.github.don194.obsidianagent: INFO
+    org.springframework.ai: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+# 项目自定义配置
+obsidian:
+  agent:
+    welcome-message: "👋 Hello! I'm your Obsidian AI Agent. How can I help you today!"
