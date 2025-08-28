@@ -2,12 +2,14 @@ package io.github.don194.obsidianagent.service;
 
 import io.github.don194.obsidianagent.agent.ObsidianAgent;
 import io.github.don194.obsidianagent.entity.ChatMessage;
+import io.github.don194.obsidianagent.memory.ConversationMemoryManager;
 import io.github.don194.obsidianagent.memory.SqliteChatMemory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Async;
@@ -32,6 +34,7 @@ public class ChatService {
     private final ObjectProvider<ObsidianAgent> agentProvider;
     private final ChatModel chatModel;
     private final SqliteChatMemory sqliteChatMemory;
+    private final ConversationMemoryManager conversationMemoryManager;
 
     /**
      * 流式聊天 - 主要入口点
@@ -51,18 +54,15 @@ public class ChatService {
             // 每次请求都获取一个全新的Agent实例
             ObsidianAgent agent = agentProvider.getObject();
 
-            // 为当前会话创建专门的MessageChatMemoryAdvisor实例
-            MessageChatMemoryAdvisor memoryAdvisor = new MessageChatMemoryAdvisor(
-                    sqliteChatMemory, sessionId, 50);
-
-            // 动态构建一个包含会话记忆的ChatClient
-            ChatClient sessionAwareChatClient = ChatClient.builder(chatModel)
-                    .defaultAdvisors(memoryAdvisor)
+            // 为 Agent 实例设置记忆管理器和会话 ID
+            agent.setMemoryManager(conversationMemoryManager);
+            agent.setSessionId(sessionId);
+            ChatClient chatClient = ChatClient.builder(chatModel)
                     .build();
 
 
             // 将这个会话感知的客户端设置给Agent
-            agent.setChatClient(sessionAwareChatClient);
+            agent.setChatClient(chatClient);
 
             // 异步生成标题（如果需要）
             checkAndGenerateTitle(sessionId, userMessage);
@@ -108,7 +108,6 @@ public class ChatService {
             log.info("Generating title for session: {}", sessionId);
 
             // 使用一个完全独立的、不带任何advisor的客户端来生成标题
-
             ChatClient titleClient = ChatClient.builder(chatModel)
                     .defaultAdvisors()
                     .build();
@@ -450,13 +449,45 @@ public class ChatService {
     }
 
     /**
-     * 将Spring AI Message转换为Map
+     * *** BUG修复 ***
+     * 将Spring AI Message转换为Map，用于前端展示。
+     * 这个方法现在可以正确处理包含工具调用的助手消息和工具响应消息。
      */
     private Map<String, Object> convertMessageToMap(Message message) {
         Map<String, Object> messageMap = new HashMap<>();
         messageMap.put("type", message.getMessageType().name().toLowerCase());
-        messageMap.put("content", message.getText());
         messageMap.put("timestamp", System.currentTimeMillis());
+
+        String content;
+
+        // 对不同类型的消息进行针对性处理，以生成可读的 content 字符串
+        if (message instanceof AssistantMessage assistantMessage) {
+            boolean hasText = assistantMessage.getText() != null && !assistantMessage.getText().isBlank();
+            boolean hasToolCalls = assistantMessage.getToolCalls() != null && !assistantMessage.getToolCalls().isEmpty();
+
+            if (hasText) {
+                // 如果有文本内容，直接使用
+                content = assistantMessage.getText();
+            } else if (hasToolCalls) {
+                // 如果没有文本内容但有工具调用，生成一个工具调用的摘要，让前端可以展示
+                content = "正在调用工具: " + assistantMessage.getToolCalls().stream()
+                        .map(AssistantMessage.ToolCall::name)
+                        .collect(Collectors.joining(", "));
+            } else {
+                // 既没有文本也没有工具调用，返回 null 以匹配之前的行为
+                content = null;
+            }
+        } else if (message instanceof ToolResponseMessage toolResponseMessage) {
+            // 对于工具响应，生成一个包含所有工具结果的摘要，使其在历史记录中可见
+            content = toolResponseMessage.getResponses().stream()
+                    .map(response -> String.format("工具 [%s] 已执行", response.name()))
+                    .collect(Collectors.joining("\n"));
+        } else {
+            // 对于 UserMessage 和 SystemMessage，直接获取文本内容
+            content = message.getText();
+        }
+
+        messageMap.put("content", content);
         return messageMap;
     }
 

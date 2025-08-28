@@ -2,6 +2,7 @@ package io.github.don194.obsidianagent.agent;
 
 import cn.hutool.core.util.StrUtil;
 
+import io.github.don194.obsidianagent.memory.ConversationMemoryManager;
 import io.github.don194.obsidianagent.model.AgentState;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,8 @@ public abstract class BaseAgent {
 
     // 核心属性
     private String name;
+    private String sessionId;
+    private ConversationMemoryManager memoryManager;
 
     // 提示词
     private String systemPrompt;
@@ -41,8 +44,6 @@ public abstract class BaseAgent {
 
     /**
      * 运行代理
-     * 重构版本：不再手动管理消息列表，完全依赖ChatClient的advisor
-     *
      * @param userPrompt 用户提示词
      * @return 执行结果
      */
@@ -54,7 +55,9 @@ public abstract class BaseAgent {
         if (StrUtil.isBlank(userPrompt)) {
             throw new RuntimeException("Cannot run agent with empty user prompt");
         }
-
+        if (memoryManager != null && sessionId != null) { // 新增代码块
+            memoryManager.addUserMessage(sessionId, userPrompt);
+        }
         // 2、执行，更改状态
         this.state = AgentState.RUNNING;
 
@@ -89,8 +92,6 @@ public abstract class BaseAgent {
 
     /**
      * 运行代理（流式输出）
-     * 重构版本：不再手动管理消息列表
-     *
      * @param userPrompt 用户提示词
      * @return 执行结果
      */
@@ -116,7 +117,9 @@ public abstract class BaseAgent {
                 sseEmitter.completeWithError(e);
                 return;
             }
-
+            if (memoryManager != null && sessionId != null) { // 新增代码块
+                memoryManager.addUserMessage(sessionId, userPrompt);
+            }
             // 2、执行，更改状态
             this.state = AgentState.RUNNING;
 
@@ -188,5 +191,8 @@ public abstract class BaseAgent {
     protected void cleanup() {
         // 子类可以重写此方法来清理资源
         log.debug("Cleaning up agent resources");
+        if (getMemoryManager() != null && getSessionId() != null) { // 新增代码块
+            getMemoryManager().clearWorkingMemory(getSessionId());
+        }
     }
 }

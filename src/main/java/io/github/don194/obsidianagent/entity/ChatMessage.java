@@ -51,7 +51,8 @@ public class ChatMessage {
     public enum MessageType {
         USER,
         ASSISTANT,
-        SYSTEM
+        SYSTEM,
+        TOOL
     }
 
     public ChatMessage(String messageId, String sessionId, MessageType messageType, String content) {

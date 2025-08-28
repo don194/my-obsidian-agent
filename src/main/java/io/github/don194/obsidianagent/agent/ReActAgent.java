@@ -14,23 +14,18 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public abstract class ReActAgent extends BaseAgent {
 
     // 当前步骤的用户消息 - 用于在执行步骤中传递给ChatClient
-    private String currentUserMessage;
 
+    private String lastActionResult;
     /**
      * 重写run方法，保存用户消息但不手动管理消息列表
      */
     @Override
     public String run(String userPrompt) {
-        // 保存用户消息，供后续步骤使用
-        this.currentUserMessage = userPrompt;
-
         // 调用父类的run方法
         return super.run(userPrompt);
     }
     @Override
     public SseEmitter runStream(String userPrompt) {
-        // 保存用户消息，供后续步骤使用
-        this.currentUserMessage = userPrompt;
 
         // 调用父类的runStream方法
         return super.runStream(userPrompt);
@@ -66,7 +61,11 @@ public abstract class ReActAgent extends BaseAgent {
                 return "思考完成 - 无需行动";
             }
             // 再行动
-            return act();
+            String actionResult = act();
+
+            // 关键：将行动结果保存，用作下一步的系统消息
+            this.lastActionResult = actionResult;
+            return actionResult;
         } catch (Exception e) {
             // 记录异常日志
             e.printStackTrace();
@@ -75,27 +74,10 @@ public abstract class ReActAgent extends BaseAgent {
     }
 
     /**
-     * 获取当前应该发送给ChatClient的用户消息
-     * 第一步使用原始用户消息，后续步骤使用继续提示
-     */
-    protected String getCurrentStepUserMessage() {
-        return (getCurrentStep() == 1) ? currentUserMessage : getNextStepPrompt();
-    }
-
-    /**
-     * 构建当前步骤的系统提示词
-     * 简化版本：始终返回基础系统提示，不再动态修改
-     */
-    protected String getCurrentStepSystemPrompt() {
-        return getSystemPrompt();
-    }
-
-    /**
      * 重写cleanup方法
      */
     @Override
     protected void cleanup() {
         super.cleanup();
-        this.currentUserMessage = null;
     }
 }

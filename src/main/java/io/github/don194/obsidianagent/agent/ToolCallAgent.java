@@ -5,7 +5,7 @@ import io.github.don194.obsidianagent.model.AgentState;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
@@ -41,22 +41,26 @@ public class ToolCallAgent extends ReActAgent {
 
     /**
      * 处理当前状态并决定下一步行动
-     * 重构版本：使用父类提供的辅助方法，不再手动管理消息
-     *
      * @return 是否需要执行行动
      */
     @Override
     public boolean think() {
         try {
             // 使用父类提供的辅助方法获取系统提示和用户消息
-            String systemPrompt = getCurrentStepSystemPrompt();
-            String userMessage = getCurrentStepUserMessage();
+            String systemPrompt = getSystemPrompt();
 
-            // 直接使用ChatClient进行对话，让advisor自动处理消息历史
+            List<Message> conversationHistory = getMemoryManager().getConversationHistory(getSessionId());
+            //检查最后一个Message是不是user，如果不是增加
+            Message message = conversationHistory.get(conversationHistory.size() - 1);
+            if(message.getMessageType() != MessageType.USER) {
+                Message nextStepMessage = new UserMessage(getNextStepPrompt());
+                conversationHistory.add(nextStepMessage);
+            }
+
             ChatResponse chatResponse = getChatClient()
                     .prompt()
                     .system(systemPrompt)
-                    .user(userMessage)
+                    .messages(conversationHistory)
                     .options(chatOptions)
                     .call()
                     .chatResponse();
@@ -66,6 +70,9 @@ public class ToolCallAgent extends ReActAgent {
 
             // 解析工具调用结果
             AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
+            if (getMemoryManager() != null && getSessionId() != null) {
+                getMemoryManager().addAssistantMessage(getSessionId(), assistantMessage.getText(), assistantMessage.getToolCalls());
+            }
             List<AssistantMessage.ToolCall> toolCallList = assistantMessage.getToolCalls();
 
             // 输出提示信息
@@ -92,8 +99,6 @@ public class ToolCallAgent extends ReActAgent {
 
     /**
      * 执行工具调用并处理结果
-     * 重构版本：手动执行工具，通过ChatClient记录结果让advisor处理
-     *
      * @return 执行结果
      */
     @Override
@@ -106,38 +111,36 @@ public class ToolCallAgent extends ReActAgent {
                 return "没有工具需要执行";
             }
 
-            // 手动执行工具调用
-            StringBuilder results = new StringBuilder();
-            boolean terminateToolCalled = false;
 
-            for (AssistantMessage.ToolCall toolCall : toolCalls) {
+            // 1. 执行所有工具调用，并收集结果
+            List<ToolResponseMessage.ToolResponse> toolResponses = toolCalls.stream().map(toolCall -> {
+                log.info("Executing tool: {} with args: {}", toolCall.name(), toolCall.arguments());
+                String result;
                 try {
-                    // 查找对应的工具并执行
                     ToolCallback tool = findTool(toolCall.name());
                     if (tool != null) {
-                        String result = tool.call(toolCall.arguments());
-                        results.append("工具 ").append(toolCall.name()).append(" 返回的结果：").append(result).append("\n");
-
+                        result = tool.call(toolCall.arguments());
                         // 检查是否调用了终止工具
                         if ("doTerminate".equals(toolCall.name())) {
-                            terminateToolCalled = true;
+                            setState(AgentState.FINISHED);
                         }
                     } else {
-                        results.append("未找到工具：").append(toolCall.name()).append("\n");
+                        result = "Error: Tool not found: " + toolCall.name();
+                        log.warn(result);
                     }
                 } catch (Exception e) {
-                    results.append("工具 ").append(toolCall.name()).append(" 执行失败：").append(e.getMessage()).append("\n");
+                    log.error("Error executing tool {}", toolCall.name(), e);
+                    result = "Error: " + e.getMessage();
                 }
-            }
+                return new ToolResponseMessage.ToolResponse(toolCall.id(), toolCall.name(), result);
+            }).toList();
 
-            // 判断是否调用了终止工具
-            if (terminateToolCalled) {
-                setState(AgentState.FINISHED);
-            }
+            getMemoryManager().addToolResponses(getSessionId(), toolResponses);
+            String finalResults = toolResponses.stream()
+                    .map(tr -> "工具 " + tr.name() + " 返回的结果：" + tr.responseData())
+                    .collect(Collectors.joining("\n"));
 
-            String finalResults = results.toString().trim();
             log.info("工具执行结果：\n" + finalResults);
-
 
             return finalResults;
 
@@ -152,7 +155,7 @@ public class ToolCallAgent extends ReActAgent {
      */
     private ToolCallback findTool(String toolName) {
         for (ToolCallback tool : availableTools) {
-            if (tool.getName().equals(toolName)) {
+            if (tool.getToolDefinition().name().equals(toolName)) {
                 return tool;
             }
         }

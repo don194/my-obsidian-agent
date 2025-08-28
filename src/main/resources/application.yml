@@ -53,10 +53,10 @@ spring:
               args:
                 - run
                 - --directory
-                - "D:/dongh/Documents/java/mcp-obsidian"  # 指定工作目录
+                - "D:/java/mcp-obsidian"  # 指定工作目录
                 - mcp-obsidian
               env:
-                OBSIDIAN_API_KEY: ${OBSIDIAN_API_KEY:6a193ce7b058b9b251ea1486dd25914d6ac47aabbed05726025c8a5dc5bc3a5b}
+                OBSIDIAN_API_KEY: ${OBSIDIAN_API_KEY:f2bde1c1724685410f7dcf56f44a5fbb2ee8d349fb7f704f3edc0d9651fa3063}
                 OBSIDIAN_HOST: ${OBSIDIAN_HOST:127.0.0.1}
                 OBSIDIAN_PORT: ${OBSIDIAN_PORT:27123}
                 OBSIDIAN_PROTOCOL: ${OBSIDIAN_PROTOCOL:http}
