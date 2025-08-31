@@ -6,9 +6,6 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * OpenAI配置类 - 使用Spring AI M6自动配置
- *
- * Spring AI M6推荐通过application.yml配置，自动创建ChatModel Bean
- * 无需手动创建OpenAiApi和OpenAiChatModel Bean
  */
 @Slf4j
 @Configuration
