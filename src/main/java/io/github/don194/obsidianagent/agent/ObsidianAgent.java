@@ -54,7 +54,7 @@ public class ObsidianAgent extends ToolCallAgent {
 
         // 指导代理在每个步骤后如何继续。
         final String NEXT_STEP_PROMPT = """
-                请基于之前的对话历史继续执行下一步。
+                请基于之前的对话历史和结果继续执行下一步。
                 """;
         this.setNextStepPrompt(NEXT_STEP_PROMPT);
 
